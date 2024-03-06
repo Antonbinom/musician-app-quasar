@@ -4,64 +4,93 @@ q-page.row.items-center.justify-center
     span {{ beatCounter }}
     .beat-dots.row
       div.beat-dots__item(
-        v-for="(dot, index) in timeSignature.bottomNumber" 
-        :key="index" 
+        v-for="(dot, index) in timeSignature.bottomNumber"
+        :key="index"
         :class="index+1 === currentBeat && isActive ? 'active' : ''"
         )
     .tempo-wrapper.text-center
       .tempo-controller.flex.no-wrap.items-center
         q-btn.tempo-btn__plus(
-          push 
-          color="primary" 
+          push
+          color="primary"
           round @click="currentTempo > minTempo && currentTempo--"
         ) -
         q-slider.tempo-input(
-          v-model="currentTempo" 
-          :min="minTempo" 
-          :max="maxTempo" 
-          color="green" 
-          selection-color="transparent" 
-          track-size="15px" 
+          v-model="currentTempo"
+          :min="minTempo"
+          :max="maxTempo"
+          color="green"
+          selection-color="transparent"
+          track-size="15px"
           thumb-size="30px"
           )
         q-btn.tempo-btn__minus(
-          push color="primary" 
-          round 
+          push color="primary"
+          round
           @click="currentTempo < maxTempo && currentTempo++"
         ) +
       span.tempo-counter {{ currentTempo }} BPM
     q-btn(
-      color="primary" 
-      :label="isActive ? 'STOP' : 'START'"
+      color="primary"
+      :label="isActive ? 'stop' : 'start'"
       @click="isActive ? stop(): start()"
     )
+    q-btn(
+      color="primary"
+      label="tap tempo"
+      @click="tapTempo"
+    )
+    <q-toggle v-model="isAccent" label="Accent" />
+    <div class="q-gutter-sm">
+      <q-radio v-model="currentSound" val="marimba" label="Marimba" />
+      <q-radio v-model="currentSound" val="conga" label="Conga" />
+      <q-radio v-model="currentSound" val="drum kit" label="Drum kit" />
+    </div>
+    <div class="q-gutter-sm">
+      <q-radio v-model="timeSignature.bottomNumber" :val="size" :label="size" v-for="size in sizes" :key="size"/>
+    </div>
 </template>
 
 <script setup lang="ts">
+import { computed, onMounted, reactive, ref } from 'vue';
+import { useSound } from '@vueuse/sound';
 import { useIntervalFn } from '@vueuse/core';
+import high from '../assets/sounds/marimba_high.mp3';
+import low from '../assets/sounds/marimba_low.mp3';
 
-import { computed, onMounted, ref } from 'vue';
-const interval = computed(() => Math.round(60000 / currentTempo.value));
+const onSoundLow = useSound(low, { volume: 0.25 });
+const onSoundHigh = useSound(high, { volume: 0.25 });
+
 const beatCounter = ref('- -');
-const timeSignature = ref({
+const timeSignature = reactive({
   topNumber: 4,
   bottomNumber: 4,
 });
+
 const currentBeat = ref(0);
-const minTempo = ref(0);
+const minTempo = ref(30);
 const maxTempo = ref(300);
 const currentTempo = ref(60);
+const isAccent = ref(true);
+const currentSound = ref('marimba');
+const sizes = [4, 5, 6, 7, 8, 9, 10, 11, 12];
+
+const interval = computed(() => Math.round(60000 / currentTempo.value));
 
 const { pause, resume, isActive } = useIntervalFn(() => {
-  if (currentBeat.value > timeSignature.value.bottomNumber - 1) {
-    beatCounter.value = '0';
-    currentBeat.value = 0;
+  if (currentBeat.value > timeSignature.bottomNumber - 1) {
+    isAccent.value ? onSoundHigh.play() : onSoundLow.play();
+    beatCounter.value = '1';
+    currentBeat.value = 1;
+  } else {
+    currentBeat.value = currentBeat.value + 1;
+    beatCounter.value = String(currentBeat.value);
+    onSoundLow.play();
   }
-  currentBeat.value = currentBeat.value + 1;
-  beatCounter.value = String(currentBeat.value);
 }, interval);
 
 const start = () => {
+  isAccent.value ? onSoundHigh.play() : onSoundLow.play();
   currentBeat.value = 1;
   beatCounter.value = String(currentBeat.value);
   resume();
@@ -71,6 +100,10 @@ const stop = () => {
   currentBeat.value = 0;
   beatCounter.value = '- -';
   pause();
+};
+
+const tapTempo = () => {
+  currentTempo.value = Math.floor(Math.random() * (300 - 30 + 1)) + 30;
 };
 
 onMounted(() => {
