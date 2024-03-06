@@ -41,22 +41,53 @@ q-page.row.items-center.justify-center
       @click="tapTempo"
     )
     <q-toggle v-model="isAccent" label="Accent" />
-    .q-gutter-sm
-      q-radio(v-model="timeSignature.topNumber" :val="1" label="4")
-      q-radio(v-model="timeSignature.topNumber" :val="2" label="8")
-      q-radio(v-model="timeSignature.topNumber" :val="4" label="16")
-    .q-gutter-sm
-      q-radio(
-        v-model="timeSignature.bottomNumber"
-        :val="size"
-        :label="size"
-        v-for="(size, index) in timeSignature.topNumber*4"
-        :key="index"
-      )
-    .q-gutter-sm
-      q-radio(v-model="currentSound" val="marimba" label="Marimba")
-      q-radio(v-model="currentSound" val="conga" label="Conga")
-      q-radio(v-model="currentSound" val="drum kit" label="Drum kit")
+    <q-toggle @update:model-value="toggleMode" v-model="advancedMode" label="Advanced Mode" />
+
+    .column.items-center
+      .q-gutter-sm(v-if="!advancedMode")
+        q-radio(v-model="timeSignature.topNumber" :val="4" label="4")
+        q-radio(v-model="timeSignature.topNumber" :val="8" label="8")
+        q-radio(v-model="timeSignature.topNumber" :val="16" label="16")
+      .q-gutter-sm(v-if="!advancedMode")
+        q-radio(
+          v-model="timeSignature.bottomNumber"
+          :val="size"
+          :label="size"
+          v-for="(size, index) in timeSignature.topNumber"
+          :key="index"
+        )
+      .q-pa-md.q-gutter-md(v-if="advancedMode")
+        .q-pa-md.flex.items-center
+            q-select.q-mr-md(
+              dense
+              v-model="timeSignature.bottomNumber"
+              :options="[1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24]"
+              behavior="menu"
+            )
+            q-select.q-mr-md(
+              dense
+              v-model="timeSignature.topNumber"
+              :options="[4, 8, 16, 32]"
+              color="primary"
+              behavior="menu"
+            )
+            q-btn(
+              round
+              color="primary"
+              size="10px"
+              label="+"
+              style="height: 10px"
+              @click="addBar"
+            )
+        pre {{ bars }}
+        pre {{ timeSignature }}
+        pre {{ currentBar }}
+      .q-gutter-sm
+        q-radio(v-model="currentSound" val="marimba" label="Marimba")
+        q-radio(v-model="currentSound" val="conga" label="Conga")
+        q-radio(v-model="currentSound" val="drum kit" label="Drum kit")
+
+
 </template>
 
 <script setup lang="ts">
@@ -70,20 +101,23 @@ const onSoundLow = useSound(low, { volume: 0.25 });
 const onSoundHigh = useSound(high, { volume: 0.25 });
 
 const beatCounter = ref('- -');
-const timeSignature = reactive({
-  topNumber: 1,
+const timeSignature: { topNumber: number; bottomNumber: number } = reactive({
+  topNumber: 4,
   bottomNumber: 4,
 });
 
 const currentBeat = ref(0);
 const currentTempo = ref(60);
 const minTempo = ref(30);
-const maxTempo = ref(300);
+const maxTempo = ref(240);
 const isAccent = ref(true);
 const currentSound = ref('marimba');
+const advancedMode = ref(false);
+const bars = ref<(typeof timeSignature)[] | []>([]);
+const currentBar = ref(0);
 
 const interval = computed(() =>
-  Math.round(60000 / currentTempo.value / timeSignature.topNumber)
+  Math.round((60000 / currentTempo.value / timeSignature.topNumber) * 4)
 );
 
 const { pause, resume, isActive } = useIntervalFn(() => {
@@ -91,6 +125,15 @@ const { pause, resume, isActive } = useIntervalFn(() => {
     isAccent.value ? onSoundHigh.play() : onSoundLow.play();
     beatCounter.value = '1';
     currentBeat.value = 1;
+    if (advancedMode.value && bars.value.length > 1) {
+      if (currentBar.value < bars.value.length - 1) {
+        currentBar.value = currentBar.value + 1;
+      } else {
+        currentBar.value = 0;
+      }
+      timeSignature.topNumber = bars.value[currentBar.value].topNumber;
+      timeSignature.bottomNumber = bars.value[currentBar.value].bottomNumber;
+    }
   } else {
     currentBeat.value = currentBeat.value + 1;
     beatCounter.value = String(currentBeat.value);
@@ -99,6 +142,11 @@ const { pause, resume, isActive } = useIntervalFn(() => {
 }, interval);
 
 const start = () => {
+  if (advancedMode.value) {
+    timeSignature.topNumber = bars.value[currentBar.value].topNumber;
+    timeSignature.bottomNumber = bars.value[currentBar.value].bottomNumber;
+  }
+
   isAccent.value ? onSoundHigh.play() : onSoundLow.play();
   currentBeat.value = 1;
   beatCounter.value = String(currentBeat.value);
@@ -112,9 +160,22 @@ const stop = () => {
 };
 
 const tapTempo = () => {
-  currentTempo.value = Math.floor(Math.random() * (300 - 30 + 1)) + 30;
+  currentTempo.value = Math.floor(Math.random() * (240 - 30 + 1)) + 30;
+};
+const toggleMode = () => {
+  isActive && stop();
+  timeSignature.topNumber = 4;
+  timeSignature.bottomNumber = 4;
 };
 
+const addBar = () => {
+  const timeSignatureCopy = Object.assign({}, timeSignature);
+  if (!bars.value.length) {
+    bars.value = [timeSignatureCopy];
+  } else {
+    bars.value = [...bars.value, timeSignatureCopy];
+  }
+};
 onMounted(() => {
   pause();
 });
