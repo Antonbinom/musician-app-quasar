@@ -31,6 +31,7 @@ q-page.row.items-center.justify-center
         ) +
       span.tempo-counter {{ currentTempo }} BPM
     q-btn(
+      :disable="advancedMode && !bars.length"
       color="primary"
       :label="isActive ? 'stop' : 'start'"
       @click="isActive ? stop(): start()"
@@ -58,30 +59,55 @@ q-page.row.items-center.justify-center
         )
       .q-pa-md.q-gutter-md(v-if="advancedMode")
         .q-pa-md.flex.items-center
-            q-select.q-mr-md(
-              dense
-              v-model="timeSignature.bottomNumber"
-              :options="[1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24]"
-              behavior="menu"
-            )
-            q-select.q-mr-md(
-              dense
-              v-model="timeSignature.topNumber"
-              :options="[4, 8, 16, 32]"
+          q-select.q-mr-md(
+            dense
+            v-model="timeSignature.bottomNumber"
+            :options="[1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24]"
+            behavior="menu"
+          )
+          q-select.q-mr-md(
+            dense
+            v-model="timeSignature.topNumber"
+            :options="[4, 8, 16, 32]"
+            color="primary"
+            behavior="menu"
+          )
+          q-btn(
+            round
+            color="primary"
+            size="10px"
+            label="+"
+            style="height: 10px"
+            @click="addBar"
+          )
+        .q-px-lg.flex.items-center.justify-between
+          q-btn(
+              round
               color="primary"
-              behavior="menu"
+              size="10px"
+              label="-"
+              style="height: 10px"
+              @click="timeSignature.repeat > 1 && timeSignature.repeat--"
             )
-            q-btn(
+          span {{ timeSignature.repeat }}
+          q-btn(
               round
               color="primary"
               size="10px"
               label="+"
               style="height: 10px"
-              @click="addBar"
+              @click="timeSignature.repeat++"
             )
-        pre {{ bars }}
-        pre {{ timeSignature }}
-        pre {{ currentBar }}
+      .q-px-lg.flex.items-center.justify-between(v-v-if="bars.length")
+        .q-px-sm(
+          v-for="(bar, index) in bars" :key="bar.id"
+          @click="removeBar(index)"
+          ) {{ bar.topNumber }}/{{ bar.bottomNumber }} x {{ bar.repeat }}
+      pre {{ bars }}
+      pre {{ timeSignature }}
+      pre current bar {{ currentBar }}
+      pre repeats {{ currentBarRepeats }}
+
       .q-gutter-sm
         q-radio(v-model="currentSound" val="marimba" label="Marimba")
         q-radio(v-model="currentSound" val="conga" label="Conga")
@@ -97,13 +123,22 @@ import { useIntervalFn } from '@vueuse/core';
 import high from '../assets/sounds/marimba_high.mp3';
 import low from '../assets/sounds/marimba_low.mp3';
 
+interface TimeSignature {
+  id: number;
+  topNumber: number;
+  bottomNumber: number;
+  repeat: number;
+}
+
 const onSoundLow = useSound(low, { volume: 0.25 });
 const onSoundHigh = useSound(high, { volume: 0.25 });
 
 const beatCounter = ref('- -');
-const timeSignature: { topNumber: number; bottomNumber: number } = reactive({
+const timeSignature: TimeSignature = reactive({
+  id: 0,
   topNumber: 4,
   bottomNumber: 4,
+  repeat: 1,
 });
 
 const currentBeat = ref(0);
@@ -113,8 +148,9 @@ const maxTempo = ref(240);
 const isAccent = ref(true);
 const currentSound = ref('marimba');
 const advancedMode = ref(false);
-const bars = ref<(typeof timeSignature)[] | []>([]);
+const bars = ref<TimeSignature[] | []>([]);
 const currentBar = ref(0);
+const currentBarRepeats = ref(0);
 
 const interval = computed(() =>
   Math.round((60000 / currentTempo.value / timeSignature.topNumber) * 4)
@@ -125,14 +161,8 @@ const { pause, resume, isActive } = useIntervalFn(() => {
     isAccent.value ? onSoundHigh.play() : onSoundLow.play();
     beatCounter.value = '1';
     currentBeat.value = 1;
-    if (advancedMode.value && bars.value.length > 1) {
-      if (currentBar.value < bars.value.length - 1) {
-        currentBar.value = currentBar.value + 1;
-      } else {
-        currentBar.value = 0;
-      }
-      timeSignature.topNumber = bars.value[currentBar.value].topNumber;
-      timeSignature.bottomNumber = bars.value[currentBar.value].bottomNumber;
+    if (advancedMode.value) {
+      ifAdvanceMode();
     }
   } else {
     currentBeat.value = currentBeat.value + 1;
@@ -140,6 +170,38 @@ const { pause, resume, isActive } = useIntervalFn(() => {
     onSoundLow.play();
   }
 }, interval);
+
+const ifAdvanceMode = () => {
+  if (bars.value.length > 1) {
+    if (currentBar.value + 1 < bars.value.length) {
+      ifRepeats(false);
+      timeSignature.topNumber = bars.value[currentBar.value].topNumber;
+      timeSignature.bottomNumber = bars.value[currentBar.value].bottomNumber;
+      timeSignature.repeat = bars.value[currentBar.value].repeat;
+    } else {
+      ifRepeats(true);
+
+      timeSignature.topNumber = bars.value[currentBar.value].topNumber;
+      timeSignature.bottomNumber = bars.value[currentBar.value].bottomNumber;
+      timeSignature.repeat = bars.value[currentBar.value].repeat;
+    }
+  } else {
+    ifRepeats(true);
+  }
+};
+
+const ifRepeats = (condition: boolean) => {
+  if (bars.value[currentBar.value].repeat <= currentBarRepeats.value + 1) {
+    if (condition) {
+      stop();
+    } else {
+      currentBar.value = currentBar.value + 1;
+      currentBarRepeats.value = 0;
+    }
+  } else {
+    currentBarRepeats.value = currentBarRepeats.value + 1;
+  }
+};
 
 const start = () => {
   if (advancedMode.value) {
@@ -156,6 +218,8 @@ const start = () => {
 const stop = () => {
   currentBeat.value = 0;
   beatCounter.value = '- -';
+  currentBar.value = 0;
+  currentBarRepeats.value = 0;
   pause();
 };
 
@@ -173,8 +237,17 @@ const addBar = () => {
   if (!bars.value.length) {
     bars.value = [timeSignatureCopy];
   } else {
+    timeSignatureCopy.id = bars.value.length;
     bars.value = [...bars.value, timeSignatureCopy];
   }
+  //???
+  timeSignature.topNumber = 4;
+  timeSignature.bottomNumber = 4;
+  timeSignature.repeat = 1;
+};
+
+const removeBar = (index: number) => {
+  bars.value.splice(index, 1);
 };
 onMounted(() => {
   pause();
