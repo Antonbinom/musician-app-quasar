@@ -30,19 +30,34 @@ q-page.row.items-center.justify-center
           @click="currentTempo < maxTempo && currentTempo++"
         ) +
       span.tempo-counter {{ currentTempo }} BPM
+    .start-buttons.q-ma-sm
+      q-btn(
+        :disable="advancedMode && !bars.length"
+        :color="isActive ? 'negative' : isPaused ? 'negative' :'primary'"
+        :label="isActive ? 'stop' : isPaused ? 'stop' : 'start'"
+        @click="isActive ? stop(): isPaused ? stop() : start()"
+      )
+      q-btn.q-ml-sm(
+        v-if="advancedMode"
+        :disable="!isActive && !isPaused || advancedMode && !bars.length"
+        :color="isActive ? 'warning' :'primary'"
+        :label="isActive ? 'pause' : 'resume'"
+        @click="isActive ? handlePause(): handleResume()"
+      )
     q-btn(
-      :disable="advancedMode && !bars.length"
-      color="primary"
-      :label="isActive ? 'stop' : 'start'"
-      @click="isActive ? stop(): start()"
-    )
-    q-btn(
-      color="primary"
+      color="secondary"
       label="tap tempo"
       @click="tapTempo"
     )
-    <q-toggle v-model="isAccent" label="Accent" />
-    <q-toggle @update:model-value="toggleMode" v-model="advancedMode" label="Advanced Mode" />
+    q-toggle(
+      v-model="isAccent"
+      label="Accent"
+    )
+    q-toggle(
+      @update:model-value="toggleMode"
+      v-model="advancedMode"
+      label="Advanced Mode"
+    )
 
     .column.items-center
       .q-gutter-sm(v-if="!advancedMode")
@@ -57,15 +72,17 @@ q-page.row.items-center.justify-center
           v-for="(size, index) in timeSignature.topNumber"
           :key="index"
         )
-      .q-pa-md.q-gutter-md(v-if="advancedMode")
+      .q-pa-md.column.items-center(v-if="advancedMode")
         .q-pa-md.flex.items-center
           q-select.q-mr-md(
+            :disable="isActive"
             dense
             v-model="timeSignature.bottomNumber"
             :options="[1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24]"
             behavior="menu"
           )
           q-select.q-mr-md(
+            :disable="isActive"
             dense
             v-model="timeSignature.topNumber"
             :options="[4, 8, 16, 32]"
@@ -73,6 +90,7 @@ q-page.row.items-center.justify-center
             behavior="menu"
           )
           q-btn(
+            :disable="isActive"
             round
             color="primary"
             size="10px"
@@ -80,38 +98,87 @@ q-page.row.items-center.justify-center
             style="height: 10px"
             @click="addBar"
           )
-        .q-px-lg.flex.items-center.justify-between
+        .q-px-lg.flex.items-center.justify-between(style="width: 190px")
           q-btn(
-              round
-              color="primary"
-              size="10px"
-              label="-"
-              style="height: 10px"
-              @click="timeSignature.repeat > 1 && timeSignature.repeat--"
-            )
+            :disable="isActive"
+            round
+            color="primary"
+            size="10px"
+            label="-"
+            style="height: 10px"
+            @click="timeSignature.repeat > 1 && timeSignature.repeat--"
+          )
           span {{ timeSignature.repeat }}
           q-btn(
+            :disable="isActive"
+            round
+            color="primary"
+            size="10px"
+            label="+"
+            style="height: 10px"
+            @click="timeSignature.repeat++"
+          )
+        .q-pa-lg.flex.items-center(v-if="bars.length")
+          .row.items-center(v-for="(bar, index) in bars" :key="bar.id")
+            .bar-wrapper.column.items-center
+              .bar-info.column.items-center.q-px-
+                .q-pa-md.column.items-center
+                  .bar-size.flex.items-center
+                    q-select.q-mr-md(
+                      :disable="isActive"
+                      v-model="bar.bottomNumber"
+                      :options="[1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24]"
+                      behavior="menu"
+                      dense
+                    )
+                    q-select(
+                      :disable="isActive"
+                      v-model="bar.topNumber"
+                      :options="[4, 8, 16, 32]"
+                      color="primary"
+                      behavior="menu"
+                      dense
+                    )
+                  .bar-times.flex.items-center
+                    q-input(
+                      :disable="isActive"
+                      v-model="bar.repeat"
+                      type="number"
+                      :min="1"
+                      :max="99"
+                      dense
+                      style="width: 100%"
+                      )
+                      template(v-slot:before)
+                        q-icon(name="close" size="sm")
+              q-btn(
+                :disable="isActive"
+                outline
+                round
+                size="8px"
+                style="width:8px"
+                dense
+                color="primary"
+                label="x"
+                @click="removeBar(index)"
+              )
+            q-btn(
+              :disable="isActive"
+              v-if="index+1 < bars.length"
+              flat
               round
               color="primary"
-              size="10px"
-              label="+"
-              style="height: 10px"
-              @click="timeSignature.repeat++"
+              icon="compare_arrows"
+              @click="[bars[index], bars[index+1]] = [bars[index+1], bars[index]]"
             )
-      .q-px-lg.flex.items-center.justify-between(v-v-if="bars.length")
-        .q-px-sm(
-          v-for="(bar, index) in bars" :key="bar.id"
-          @click="removeBar(index)"
-          ) {{ bar.topNumber }}/{{ bar.bottomNumber }} x {{ bar.repeat }}
-      pre {{ bars }}
-      pre {{ timeSignature }}
-      pre current bar {{ currentBar }}
-      pre repeats {{ currentBarRepeats }}
-
-      .q-gutter-sm
-        q-radio(v-model="currentSound" val="marimba" label="Marimba")
-        q-radio(v-model="currentSound" val="conga" label="Conga")
-        q-radio(v-model="currentSound" val="drum kit" label="Drum kit")
+        q-toggle(
+          v-model="isLooped"
+          label="Loop"
+        )
+    .q-gutter-sm
+      q-radio(v-model="currentSound" val="marimba" label="Marimba")
+      q-radio(v-model="currentSound" val="conga" label="Conga")
+      q-radio(v-model="currentSound" val="drum kit" label="Drum kit")
 
 
 </template>
@@ -141,29 +208,30 @@ const timeSignature: TimeSignature = reactive({
   repeat: 1,
 });
 
-const currentBeat = ref(0);
-const currentTempo = ref(60);
-const minTempo = ref(30);
-const maxTempo = ref(240);
-const isAccent = ref(true);
-const currentSound = ref('marimba');
-const advancedMode = ref(false);
+const currentBeat = ref<number>(0);
+const currentTempo = ref<number>(60);
+const minTempo = ref<number>(30);
+const maxTempo = ref<number>(240);
+const isAccent = ref<boolean>(true);
+const currentSound = ref<string>('marimba');
+const advancedMode = ref<boolean>(false);
 const bars = ref<TimeSignature[] | []>([]);
-const currentBar = ref(0);
-const currentBarRepeats = ref(0);
+const currentBar = ref<number>(0);
+const currentBarRepeats = ref<number>(0);
+const isLooped = ref<boolean>(true);
+const isPaused = ref<boolean>(false);
 
 const interval = computed(() =>
   Math.round((60000 / currentTempo.value / timeSignature.topNumber) * 4)
 );
 
 const { pause, resume, isActive } = useIntervalFn(() => {
+  // const nextBeat = currentBeat.value + 1;
   if (currentBeat.value > timeSignature.bottomNumber - 1) {
     isAccent.value ? onSoundHigh.play() : onSoundLow.play();
     beatCounter.value = '1';
     currentBeat.value = 1;
-    if (advancedMode.value) {
-      ifAdvanceMode();
-    }
+    advancedMode.value && ifAdvanceMode();
   } else {
     currentBeat.value = currentBeat.value + 1;
     beatCounter.value = String(currentBeat.value);
@@ -180,7 +248,6 @@ const ifAdvanceMode = () => {
       timeSignature.repeat = bars.value[currentBar.value].repeat;
     } else {
       ifRepeats(true);
-
       timeSignature.topNumber = bars.value[currentBar.value].topNumber;
       timeSignature.bottomNumber = bars.value[currentBar.value].bottomNumber;
       timeSignature.repeat = bars.value[currentBar.value].repeat;
@@ -188,22 +255,25 @@ const ifAdvanceMode = () => {
   } else {
     ifRepeats(true);
   }
+  isLooped.value && start();
 };
 
 const ifRepeats = (condition: boolean) => {
-  if (bars.value[currentBar.value].repeat <= currentBarRepeats.value + 1) {
-    if (condition) {
-      stop();
-    } else {
-      currentBar.value = currentBar.value + 1;
-      currentBarRepeats.value = 0;
-    }
+  const repeats = bars.value[currentBar.value].repeat;
+  const nextRepeats = currentBarRepeats.value + 1;
+  if (repeats <= nextRepeats) {
+    condition
+      ? stop()
+      : ((currentBar.value = currentBar.value + 1),
+        (currentBarRepeats.value = 0));
   } else {
-    currentBarRepeats.value = currentBarRepeats.value + 1;
+    currentBarRepeats.value++;
   }
 };
 
 const start = () => {
+  isPaused.value = false;
+
   if (advancedMode.value) {
     timeSignature.topNumber = bars.value[currentBar.value].topNumber;
     timeSignature.bottomNumber = bars.value[currentBar.value].bottomNumber;
@@ -220,6 +290,7 @@ const stop = () => {
   beatCounter.value = '- -';
   currentBar.value = 0;
   currentBarRepeats.value = 0;
+  isPaused.value = false;
   pause();
 };
 
@@ -248,6 +319,16 @@ const addBar = () => {
 
 const removeBar = (index: number) => {
   bars.value.splice(index, 1);
+};
+
+const handlePause = () => {
+  isPaused.value = true;
+  pause();
+};
+
+const handleResume = () => {
+  isPaused.value = false;
+  resume();
 };
 onMounted(() => {
   pause();
